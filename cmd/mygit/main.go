@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"compress/zlib"
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -30,11 +31,14 @@ func run() error {
 		return runInitCmd()
 	case "cat-file":
 		return runCatFileCmd()
+	case "hash-object":
+		return runHashObjCmd()
 	}
 	return fmt.Errorf("unknown command: %s", cmd)
 }
 
 func runInitCmd() error {
+	// ./your_git.sh init
 	for _, dir := range []string{".git", ".git/objects", ".git/refs"} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating directory: %s\n", err)
@@ -73,5 +77,47 @@ func runCatFileCmd() error {
 	}
 	parts := bytes.SplitN(data, []byte("\x00"), 2)
 	fmt.Print(string(parts[1]))
+	return nil
+}
+
+func runHashObjCmd() error {
+	// ./your_git.sh hash-object -w <file>
+	file := os.Args[3]
+
+	content, err := ioutil.ReadFile(file)
+	if err != nil {
+		return err
+	}
+
+	hasher := sha1.New()
+	header := []byte(fmt.Sprintf("blob %d\u0000", len(content)))
+	if _, err := hasher.Write(header); err != nil {
+		return err
+	}
+	if _, err := hasher.Write(content); err != nil {
+		return err
+	}
+	hash := fmt.Sprintf("%x", hasher.Sum(nil))
+
+	path := filepath.Join(".git", "objects", hash[:2], hash[2:])
+	if err := os.Mkdir(filepath.Dir(path), 0750); err != nil && !os.IsExist(err) {
+		return err
+	}
+	object, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	writer := zlib.NewWriter(object)
+	if _, err := writer.Write(header); err != nil {
+		return err
+	}
+	if _, err := writer.Write(content); err != nil {
+		return err
+	}
+	writer.Close()
+	object.Close()
+
+	fmt.Println(hash)
 	return nil
 }
