@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 )
 
+const separator = "\x00"
+
 // Usage: your_git.sh <command> <arg1> <arg2> ...
 func main() {
 	if err := run(); err != nil {
@@ -28,17 +30,22 @@ func run() error {
 	cmd := os.Args[1]
 	switch cmd {
 	case "init":
+		// ./your_git.sh init
 		return runInitCmd()
 	case "cat-file":
-		return runCatFileCmd()
+		// your_git.sh cat-file -p <hash>
+		return runCatFileCmd(os.Args[3])
 	case "hash-object":
-		return runHashObjCmd()
+		// ./your_git.sh hash-object -w <file>
+		return runHashObjCmd(os.Args[3])
+	case "ls-tree":
+		// ./your_git.sh ls-tree --name-only <tree_sha>
+		return runLsTreeCmd(os.Args[3])
 	}
 	return fmt.Errorf("unknown command: %s", cmd)
 }
 
 func runInitCmd() error {
-	// ./your_git.sh init
 	for _, dir := range []string{".git", ".git/objects", ".git/refs"} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating directory: %s\n", err)
@@ -54,12 +61,9 @@ func runInitCmd() error {
 	return nil
 }
 
-func runCatFileCmd() error {
-	// your_git.sh cat-file -p <hash>
-	hash := os.Args[3]
-
-	dirName := hash[:2]
-	fileName := hash[2:]
+func runCatFileCmd(sha string) error {
+	dirName := sha[:2]
+	fileName := sha[2:]
 
 	f, err := os.Open(filepath.Join(".git", "objects", dirName, fileName))
 	if err != nil {
@@ -75,22 +79,19 @@ func runCatFileCmd() error {
 	if err != nil {
 		return err
 	}
-	parts := bytes.SplitN(data, []byte("\x00"), 2)
+	parts := bytes.SplitN(data, []byte(separator), 2)
 	fmt.Print(string(parts[1]))
 	return nil
 }
 
-func runHashObjCmd() error {
-	// ./your_git.sh hash-object -w <file>
-	file := os.Args[3]
-
+func runHashObjCmd(file string) error {
 	content, err := ioutil.ReadFile(file)
 	if err != nil {
 		return err
 	}
 
 	hasher := sha1.New()
-	header := []byte(fmt.Sprintf("blob %d\u0000", len(content)))
+	header := []byte(fmt.Sprintf("blob %d%s", len(content), separator))
 	if _, err := hasher.Write(header); err != nil {
 		return err
 	}
@@ -119,5 +120,31 @@ func runHashObjCmd() error {
 	object.Close()
 
 	fmt.Println(hash)
+	return nil
+}
+
+func runLsTreeCmd(sha string) error {
+	dirName := sha[:2]
+	fileName := sha[2:]
+
+	f, err := os.Open(filepath.Join(".git", "objects", dirName, fileName))
+	if err != nil {
+		return err
+	}
+
+	r, err := zlib.NewReader(f)
+	if err != nil {
+		return err
+	}
+	data, err := ioutil.ReadAll(r)
+	if err != nil {
+		return err
+	}
+
+	lines := bytes.Split(data, []byte(separator))
+	for _, line := range lines[1 : len(lines)-1] {
+		sep := bytes.Split(line, []byte(" "))
+		fmt.Println(string(sep[len(sep)-1]))
+	}
 	return nil
 }
