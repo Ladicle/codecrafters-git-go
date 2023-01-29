@@ -39,6 +39,9 @@ func run() error {
 	case "write-tree":
 		// ./your_git.sh write-tree
 		return cmd.RunWriteTreeCmd()
+	case "commit-tree":
+		// ./your_git.sh commit-tree <tree_sha> -p <commit_sha> -m <message>
+		return cmd.RunCommitTreeCmd(os.Args[2], os.Args[4], os.Args[6])
 	case "debug":
 		// your_git.sh debug <hash>
 		return cmd.RunDebugCmd(os.Args[2])

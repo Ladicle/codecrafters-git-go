@@ -15,15 +15,14 @@ func RunDebugCmd(hash string) error {
 		return err
 	}
 
-	fmt.Println(len(data))
-
 	// header
 	buf := bytes.NewBuffer(data)
 	header, _ := buf.ReadString('\000')
 	header = header[:len(header)-1]
-	fmt.Printf("%s\n", header)
+	fmt.Printf("Header ----------------------------------------\n%s\n", header)
 
 	// tree entries
+	fmt.Println("Content ---------------------------------------")
 	for {
 		mode, err := buf.ReadString(' ')
 		if err != nil {
@@ -35,6 +34,7 @@ func RunDebugCmd(hash string) error {
 		sha := buf.Next(20)
 		fmt.Printf("%s %s %x\n", mode, name, sha)
 	}
+	fmt.Println("-----------------------------------------------")
 	return nil
 }
 
@@ -99,4 +99,13 @@ func RunWriteTreeCmd() error {
 	sha, err := git.WriteTreeObject(workDir)
 	fmt.Printf("%x\n", sha)
 	return err
+}
+
+func RunCommitTreeCmd(treeSHA, parentSHA, message string) error {
+	sha, err := git.WriteCommitObject(treeSHA, parentSHA, message)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%x\n", sha)
+	return nil
 }

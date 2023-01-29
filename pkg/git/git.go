@@ -10,21 +10,25 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const Null = "\x00"
+
+const (
+	ObjTypeBlob   = "blob"
+	ObjTypeTree   = "tree"
+	ObjTypeCommit = "commit"
+)
 
 func WriteBlobObject(file string, mode fs.FileMode) (sha [20]byte, _ error) {
 	content, err := ioutil.ReadFile(file)
 	if err != nil {
 		return sha, err
 	}
-	// header format = "blob #{content.bytesize}\0"
 	// see https://git-scm.com/book/en/v2/Git-Internals-Git-Objects for details.
-	header := fmt.Sprintf("blob %d\x00", len(content))
-
 	log.Printf("Write blob: %s", file)
-	return writeObject(header, content)
+	return writeObject(ObjTypeBlob, content)
 }
 
 func WriteTreeObject(dir string) (sha [20]byte, err error) {
@@ -58,15 +62,28 @@ func WriteTreeObject(dir string) (sha [20]byte, err error) {
 		log.Printf("entry: %q", line)
 	}
 
-	// header format = "tree #{entry.bytesize}\0"
-	header := fmt.Sprintf("tree %d\x00", entry.Len())
-	log.Printf("header: %q", header)
-
 	log.Printf("Write tree: %s", dir)
-	return writeObject(header, entry.Bytes())
+	return writeObject(ObjTypeTree, entry.Bytes())
 }
 
-func writeObject(header string, content []byte) (sha [20]byte, _ error) {
+func WriteCommitObject(treeSHA, parentSHA, message string) (sha [20]byte, _ error) {
+	now := time.Now().Local()
+	timestamp := fmt.Sprintf("%d %s", now.Unix(), now.Format("-0700"))
+
+	var content bytes.Buffer
+	content.WriteString(fmt.Sprintf("tree %s\n", treeSHA))
+	content.WriteString(fmt.Sprintf("parent %s\n", parentSHA))
+	content.WriteString(fmt.Sprintf("author Ladicle <dummy@example.com> %s\n", timestamp))
+	content.WriteString(fmt.Sprintf("committer Ladicle <dummy@example.com> %s\n", timestamp))
+	content.WriteString("\n")
+	content.WriteString(message)
+
+	return writeObject(ObjTypeCommit, content.Bytes())
+}
+
+func writeObject(objType string, content []byte) (sha [20]byte, _ error) {
+	header := fmt.Sprintf("%s %d\x00", objType, len(content))
+
 	var data bytes.Buffer
 	if _, err := data.WriteString(header); err != nil {
 		return sha, err
