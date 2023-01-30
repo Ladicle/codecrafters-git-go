@@ -77,6 +77,7 @@ func WriteCommitObject(treeSHA, parentSHA, message string) (sha [20]byte, _ erro
 	content.WriteString(fmt.Sprintf("committer Ladicle <dummy@example.com> %s\n", timestamp))
 	content.WriteString("\n")
 	content.WriteString(message)
+	content.WriteString("\n")
 
 	return writeObject(ObjTypeCommit, content.Bytes())
 }
